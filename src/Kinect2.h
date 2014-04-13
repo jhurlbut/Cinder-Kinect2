@@ -1,6 +1,7 @@
 /*
 * 
-* Copyright (c) 2013, Wieden+Kennedy, Stephen Schieberl
+* Copyright (c) 2013, Wieden+Kennedy
+* Stephen Schieberl, Michael Latzoni
 * All rights reserved.
 * 
 * Redistribution and use in source and binary forms, with or 
@@ -55,7 +56,27 @@
 
 namespace Kinect2 {
 
-std::string getStatusMessage( KinectStatus status );
+ci::Channel8u									channel16To8( const ci::Channel16u& channel );
+ci::Surface8u									colorizeBodyIndex( const ci::Channel8u& bodyIndexChannel );
+
+ci::Color8u										getBodyColor( uint64_t index );
+size_t											getDeviceCount();
+std::map<size_t, std::string>					getDeviceMap();
+
+ci::Vec2i										mapBodyCoordToColor( const ci::Vec3f& v, ICoordinateMapper* mapper );
+ci::Vec2i										mapBodyCoordToDepth( const ci::Vec3f& v, ICoordinateMapper* mapper );
+//ci::Surface8u									mapColorFrameToDepth( const ci::Surface8u& color, ICoordinateMapper* mapper );
+ci::Vec2i										mapDepthCoordToColor( const ci::Vec2i& v, uint16_t depth, ICoordinateMapper* mapper );
+ci::Channel16u									mapDepthFrameToColor( const ci::Channel16u& depth, ICoordinateMapper* mapper );
+
+ci::Quatf										toQuatf( const Vector4& v );
+ci::Vec2f										toVec2f( const PointF& v );
+ci::Vec2f										toVec2f( const ColorSpacePoint& v );
+ci::Vec2f										toVec2f( const DepthSpacePoint& v );
+ci::Vec3f										toVec3f( const CameraSpacePoint& v );
+ci::Vec4f										toVec4f( const Vector4& v );
+
+std::string										wcharToString( wchar_t* v );
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,66 +85,84 @@ class DeviceOptions
 public:
 	DeviceOptions();
 	
-	DeviceOptions&						enableAudio( bool enable = true );
-	DeviceOptions&						enableBody( bool enable = true );
-	DeviceOptions&						enableBodyIndex( bool enable = true );
-	DeviceOptions&						enableColor( bool enable = true );
-	DeviceOptions&						enableDepth( bool enable = true );
-	DeviceOptions&						enableInfrared( bool enable = true );
-	DeviceOptions&						enableInfraredLongExposure( bool enable = true );
-	DeviceOptions&						setDeviceId( const std::string& id = "" ); 
-	DeviceOptions&						setDeviceIndex( int32_t index = 0 );
+	DeviceOptions&								enableAudio( bool enable = true );
+	DeviceOptions&								enableBody( bool enable = true );
+	DeviceOptions&								enableBodyIndex( bool enable = true );
+	DeviceOptions&								enableColor( bool enable = true );
+	DeviceOptions&								enableDepth( bool enable = true );
+	DeviceOptions&								enableInfrared( bool enable = true );
+	DeviceOptions&								enableInfraredLongExposure( bool enable = true );
+	DeviceOptions&								setDeviceId( const std::string& id = "" ); 
+	DeviceOptions&								setDeviceIndex( int32_t index = 0 );
 
-	const std::string&					getDeviceId() const;
-	int32_t								getDeviceIndex() const;
-	bool								isAudioEnabled() const;
-	bool								isBodyEnabled() const;
-	bool								isBodyIndexEnabled() const;
-	bool								isColorEnabled() const;
-	bool								isDepthEnabled() const;
-	bool								isInfraredEnabled() const;
-	bool								isInfraredLongExposureEnabled() const;
+	const std::string&							getDeviceId() const;
+	int32_t										getDeviceIndex() const;
+	bool										isAudioEnabled() const;
+	bool										isBodyEnabled() const;
+	bool										isBodyIndexEnabled() const;
+	bool										isColorEnabled() const;
+	bool										isDepthEnabled() const;
+	bool										isInfraredEnabled() const;
+	bool										isInfraredLongExposureEnabled() const;
 protected:
-	std::string							mDeviceId;
-	int32_t								mDeviceIndex;
+	std::string									mDeviceId;
+	int32_t										mDeviceIndex;
 
-	bool								mEnabledAudio;
-	bool								mEnabledBody;
-	bool								mEnabledBodyIndex;
-	bool								mEnabledColor;
-	bool								mEnabledDepth;
-	bool								mEnabledInfrared;
-	bool								mEnabledInfraredLongExposure;
+	bool										mEnabledAudio;
+	bool										mEnabledBody;
+	bool										mEnabledBodyIndex;
+	bool										mEnabledColor;
+	bool										mEnabledDepth;
+	bool										mEnabledInfrared;
+	bool										mEnabledInfraredLongExposure;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 class Device;
 
-class User
+class Body
 {
 public:
-	struct Joint
+	Body();
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+
+	class Joint
 	{
-		ci::Vec3f		mPosition;
-		ci::Quatf		mOrientation;
-		TrackingState	mTrackingState;
+	public:
+		Joint();
+		
+		const ci::Quatf&						getOrientation() const;
+		const ci::Vec3f&						getPosition() const;
+		TrackingState							getTrackingState() const;
+	protected:
+		Joint( const ci::Vec3f& position, const ci::Quatf& orientation, TrackingState trackingState );
+		
+		ci::Quatf								mOrientation;
+		ci::Vec3f								mPosition;
+		TrackingState							mTrackingState;
+
+		friend class							Device;
 	};
 
-	std::map<JointType, User::Joint>&			getJointMap() { return mJointMap; }
-	const std::map<JointType, User::Joint>&		getJointMap() const { return mJointMap; }
+	//////////////////////////////////////////////////////////////////////////////////////////////
 
-	uint64_t									getTrackingId() const { return mTrackingId; }
-	bool										getIsTracked() const { return mIsTracked; }
-	uint8_t										getBodyIndex() const { return mBodyIndex; }
+	float										calcConfidence( bool weighted = false ) const;
 
+	uint64_t									getId() const;
+	uint8_t										getIndex() const;
+	const std::map<JointType, Body::Joint>&		getJointMap() const;
+	bool										isTracked() const;
 private:
-	std::map<JointType, User::Joint>			mJointMap;
-	bool										mIsTracked;
-	uint64_t									mTrackingId;
-	uint8_t										mBodyIndex;
+	Body( uint64_t id, uint8_t index, const std::map<JointType, Body::Joint>& jointMap );
 
-	friend class Device;
+	uint64_t									mId;
+	uint8_t										mIndex;
+	std::map<JointType, Body::Joint>			mJointMap;
+	bool										mTracked;
+
+	friend class								Device;
 };
 
 class Frame
@@ -131,31 +170,29 @@ class Frame
 public:
 	Frame();
 
-	const ci::Surface8u&				getColor() const;
-	const ci::Channel16u&				getDepth() const;
-	const std::string&					getDeviceId() const;
-	const ci::Channel16u&				getInfrared() const;
-	const ci::Channel16u&				getInfraredLongExposure() const;
-	long long							getTimeStamp() const;
-
-	const std::vector<User>&			getUsers() const { return mUsers; }
-	const ci::Channel8u&				getBodyIndex() const { return mChannelBodyIndex; };
+	const std::vector<Body>&					getBodies() const;
+	const ci::Channel8u&						getBodyIndex() const;
+	const ci::Surface8u&						getColor() const;
+	const ci::Channel16u&						getDepth() const;
+	const std::string&							getDeviceId() const;
+	const ci::Channel16u&						getInfrared() const;
+	const ci::Channel16u&						getInfraredLongExposure() const;
+	long long									getTimeStamp() const;
 protected:
 	Frame( long long frameId, const std::string& deviceId, const ci::Surface8u& color, 
 		const ci::Channel16u& depth, const ci::Channel16u& infrared, 
 		const ci::Channel16u& infraredLongExposure );
 
-	std::string							mDeviceId;
-	ci::Channel16u						mChannelDepth;
-	ci::Channel16u						mChannelInfrared;
-	ci::Channel16u						mChannelInfraredLongExposure;
-	ci::Surface8u						mSurfaceColor;
-	ci::Channel8u						mChannelBodyIndex;
-	long long							mTimeStamp;
+	std::vector<Body>							mBodies;
+	std::string									mDeviceId;
+	ci::Channel8u								mChannelBodyIndex;
+	ci::Channel16u								mChannelDepth;
+	ci::Channel16u								mChannelInfrared;
+	ci::Channel16u								mChannelInfraredLongExposure;
+	ci::Surface8u								mSurfaceColor;
+	long long									mTimeStamp;
 
-	std::vector<User>					mUsers;
-
-	friend class						Device;
+	friend class								Device;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,41 +202,77 @@ typedef std::shared_ptr<Device>	DeviceRef;
 class Device
 {
 public:
-	static DeviceRef					create();
+	static DeviceRef							create();
 	~Device();
 	
-	void								start( const DeviceOptions& deviceOptions = DeviceOptions() );
-	void								stop();
+	void										start( const DeviceOptions& deviceOptions = DeviceOptions() );
+	void										stop();
 
-	const DeviceOptions&				getDeviceOptions() const;
-	const Frame&						getFrame() const;
-	KinectStatus						getStatus() const;
-
-	// mapping methods
-	ci::Vec2i							getJointPositionInColorFrame( const ci::Vec3f& jointPosition ) const;
-	ci::Vec2i							getJointPositionInDepthFrame( const ci::Vec3f& jointPosition ) const;
-	ci::Vec2i							getDepthPointInColorFrame( const ci::Vec2i& depthPoint, uint16_t depthValue ) const;
-	std::vector<ci::Vec2f>				mapDepthFrameToColorFrame( const ci::Channel16u& depth ) const;
-	void								mapDepthFrameToColorFrame( const ci::Channel16u& depth, std::vector<ci::Vec2f>& points ) const;
-
+	ICoordinateMapper*							getCoordinateMapper() const;
+	const DeviceOptions&						getDeviceOptions() const;
+	const Frame&								getFrame() const;
 protected:
 	Device();
 
-	virtual void						update();
+	virtual void								update();
 
-	std::function<void ( Frame frame )>	mEventHandler;
+	std::function<void ( Frame frame )>			mEventHandler;
 	
-	ICoordinateMapper*					mCoordinateMapper;
-	IMultiSourceFrameReader*			mFrameReader;
-	IKinectSensor*						mSensor;
-	//WAITABLE_HANDLE					onSensorCollectionChanged();
+	ICoordinateMapper*							mCoordinateMapper;
+	IMultiSourceFrameReader*					mFrameReader;
+	IKinectSensor*								mSensor;
+	//WAITABLE_HANDLE							onSensorCollectionChanged();
 
-	DeviceOptions						mDeviceOptions;
-	Frame								mFrame;
-	KinectStatus						mStatus;
-	std::string							mStatusMessage();
+	DeviceOptions								mDeviceOptions;
+	Frame										mFrame;
+public:
 
-	std::string							wcharToString( wchar_t* v );
+	//////////////////////////////////////////////////////////////////////////////////////////////
+
+	class Exception : public ci::Exception
+	{
+	public:
+		const char* what() const throw();
+	protected:
+		char									mMessage[ 2048 ];
+		friend class							Device;
+	};
+	
+	class ExcDeviceEnumerationFailed : public Exception 
+	{
+	public:
+		ExcDeviceEnumerationFailed( long hr ) throw();
+	};
+
+	class ExcDeviceInitFailed : public Exception 
+	{
+	public:
+		ExcDeviceInitFailed( long hr, const std::string& id ) throw();
+	};
+	
+	class ExcDeviceNotAvailable : public Exception 
+	{
+	public:
+		ExcDeviceNotAvailable( long hr ) throw();
+	};
+
+	class ExcDeviceOpenFailed : public Exception 
+	{
+	public:
+		ExcDeviceOpenFailed( long hr, const std::string& id ) throw();
+	};
+
+	class ExcGetCoordinateMapperFailed : public Exception 
+	{
+	public:
+		ExcGetCoordinateMapperFailed( long hr, const std::string& id ) throw();
+	};
+
+	class ExcOpenFrameReaderFailed : public Exception 
+	{
+	public:
+		ExcOpenFrameReaderFailed( long hr, const std::string& id ) throw();
+	};
 };
 
 }
