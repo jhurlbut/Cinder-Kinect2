@@ -204,6 +204,30 @@ Vec2i mapDepthCoordToColor( const Vec2i& v, uint16_t depth, ICoordinateMapper* m
 	return Vec2i();
 }
 
+ci::Surface32f mapDepthFrameToCamera( const Channel16u& depth, ICoordinateMapper* mapper )
+{
+    size_t numPoints = depth.getWidth() * depth.getHeight();
+    ci::Surface32f channel ( depth.getWidth(), depth.getHeight(), false, SurfaceChannelOrder::RGB );
+    vector<CameraSpacePoint> cameraSpacePoints( numPoints );
+    long hr = mapper->MapDepthFrameToCameraSpace( (UINT)numPoints, depth.getData(), numPoints, &cameraSpacePoints[ 0 ] );
+    if ( SUCCEEDED( hr ) ) {
+        ci::Surface32f::Iter iter = channel.getIter();
+        size_t i = 0;
+        while ( iter.line() ) {
+            while ( iter.pixel() ) {
+                CameraSpacePoint pos = cameraSpacePoints[ i ];
+                //console()<<"cameraSpacePoints[ i ] x " << cameraSpacePoints[ i ].X << " y " << cameraSpacePoints[ i ].Y << " z " << cameraSpacePoints[ i ].Z << endl;
+                iter.r() = pos.X;
+                iter.g() = pos.Y;
+                iter.b() = pos.Z;
+                i++;
+            }
+        }
+    }
+    return channel;
+}
+
+
 Channel16u mapDepthFrameToColor( const Channel16u& depth, ICoordinateMapper* mapper )
 {
 	size_t numPoints = depth.getWidth() * depth.getHeight();
@@ -415,6 +439,10 @@ Body::Body( uint64_t id, uint8_t index, const map<JointType, Body::Joint>& joint
 : mId( id ), mIndex( index ), mJointMap( jointMap ), mTracked( true )
 {
 }
+Body::Body( uint64_t id, uint8_t index, const std::map<JointType, Body::Joint>& jointMap, HandState leftHandState, HandState rightHandState )
+: mId( id ), mIndex( index ), mJointMap( jointMap ), mTracked( true ), mLeftHandState(leftHandState), mRightHandState(rightHandState)
+{
+}
 
 float Body::calcConfidence( bool weighted ) const
 {
@@ -482,6 +510,15 @@ const map<JointType, Body::Joint>& Body::getJointMap() const
 bool Body::isTracked() const 
 { 
 	return mTracked; 
+}
+const HandState& Body::getLeftHandState() const 
+{ 
+    return mLeftHandState; 
+}
+
+const HandState& Body::getRightHandState() const 
+{ 
+    return mRightHandState; 
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -573,6 +610,9 @@ const Frame& Device::getFrame() const
 	return mFrame;
 }
 
+const ci::Vec4f&    Device::getFloorPlane() const{
+    return mFloorPlane;
+}
 void Device::start( const DeviceOptions& deviceOptions )
 {
 	long hr = S_OK;
@@ -854,6 +894,11 @@ void Device::update()
 							uint64_t id = 0;
 							kinectBody->get_TrackingId( &id );
 
+							HandState leftHandState = HandState_Unknown;
+                            HandState rightHandState = HandState_Unknown;
+                            kinectBody->get_HandLeftState(&leftHandState);
+                            kinectBody->get_HandRightState(&rightHandState);
+
 							std::map<JointType, Body::Joint> jointMap;
 							for ( int32_t j = 0; j < JointType_Count; ++j ) {
 								Body::Joint joint( 
@@ -863,12 +908,17 @@ void Device::update()
 									);
 								jointMap.insert( pair<JointType, Body::Joint>( static_cast<JointType>( j ), joint ) );
 							}
-							Body body( id, i, jointMap );
+							Body body(id, i, jointMap,leftHandState,rightHandState);
 							bodies.push_back( body );
 						}
 					}
 				}
 			}
+		}
+		if ( SUCCEEDED( hr ) ) {
+			Vector4 floorPlane;
+			hr = bodyFrame->get_FloorClipPlane( &floorPlane );
+			mFloorPlane = toVec4f(floorPlane);
 		}
 
 		if ( mDeviceOptions.isBodyIndexEnabled() ) {

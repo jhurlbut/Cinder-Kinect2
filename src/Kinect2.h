@@ -68,6 +68,7 @@ ci::Vec2i										mapBodyCoordToDepth( const ci::Vec3f& v, ICoordinateMapper* m
 //ci::Surface8u									mapColorFrameToDepth( const ci::Surface8u& color, ICoordinateMapper* mapper );
 ci::Vec2i										mapDepthCoordToColor( const ci::Vec2i& v, uint16_t depth, ICoordinateMapper* mapper );
 ci::Channel16u									mapDepthFrameToColor( const ci::Channel16u& depth, ICoordinateMapper* mapper );
+ci::Surface32f                                  mapDepthFrameToCamera( const ci::Channel16u& depth, ICoordinateMapper* mapper );
 
 ci::Quatf										toQuatf( const Vector4& v );
 ci::Vec2f										toVec2f( const PointF& v );
@@ -154,13 +155,19 @@ public:
 	uint8_t										getIndex() const;
 	const std::map<JointType, Body::Joint>&		getJointMap() const;
 	bool										isTracked() const;
+	const HandState&                            getLeftHandState() const;
+    const HandState&                            getRightHandState() const;
+
 private:
 	Body( uint64_t id, uint8_t index, const std::map<JointType, Body::Joint>& jointMap );
+	Body( uint64_t id, uint8_t index, const std::map<JointType, Body::Joint>& jointMap, HandState leftHandState, HandState rightHandState );
 
 	uint64_t									mId;
 	uint8_t										mIndex;
 	std::map<JointType, Body::Joint>			mJointMap;
 	bool										mTracked;
+	HandState									mLeftHandState;
+    HandState                                   mRightHandState;
 
 	friend class								Device;
 };
@@ -211,6 +218,8 @@ public:
 	ICoordinateMapper*							getCoordinateMapper() const;
 	const DeviceOptions&						getDeviceOptions() const;
 	const Frame&								getFrame() const;
+	const ci::Vec4f&                            getFloorPlane() const;
+
 protected:
 	Device();
 
@@ -225,6 +234,8 @@ protected:
 
 	DeviceOptions								mDeviceOptions;
 	Frame										mFrame;
+	ci::Vec4f                                   mFloorPlane;
+
 public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
